@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Trading Signal Area</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background: #0b0e14; color: #d1d4dc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; touch-action: pan-y; }
+        
+        /* ─── Header ─── */
+        .header { display: flex; justify-content: space-between; align-items: center; background: #1e222d; padding: 8px 10px; border-bottom: 1px solid #2a2e39; flex-shrink: 0; }
+        .controls { display: flex; gap: 8px; align-items: center; flex: 1;}
+        select { padding: 8px; border-radius: 4px; border: 1px solid #434651; background: #2a2e39; color: white; font-size: 14px; font-weight: bold; outline: none; flex: 1; }
+        .refresh-btn { background: #FF9800; color: #000; font-weight: bold; padding: 8px 15px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; flex-shrink: 0; }
+        
+        /* ─── Chart Section ─── */
+        .main-content { flex: 1; padding: 10px; display: flex; flex-direction: column; background: #0b0e14; height: 100%; }
+        .chart-box { flex: 1; border: 2px solid #2a2e39; border-top-left-radius: 8px; border-top-right-radius: 8px; position: relative; overflow: hidden; background: #131722; touch-action: none; }
+        #chartContainer { width: 100%; height: 100%; }
+        #chartMessage { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 16px; font-weight: bold; color: #FF9800; text-align: center; z-index: 10; width: 90%; }
+
+        /* ─── Bottom Bar ─── */
+        .chart-footer { background: #1e222d; padding: 10px 12px; border: 2px solid #2a2e39; border-top: none; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #787b86; }
+        .live-indicator { display: flex; align-items: center; gap: 6px; font-weight: bold; color: #00E676; }
+        .live-dot { height: 8px; width: 8px; background-color: #00E676; border-radius: 50%; box-shadow: 0 0 8px #00E676; animation: blink 1s infinite;}
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        .time-display { font-family: monospace; font-size: 14px; color: #d1d4dc; font-weight: bold; }
+
+        /* ─── Signal Box ─── */
+        .signal-wrapper { background: #151924; padding: 15px; border-top: 2px solid #2a2e39; flex-shrink: 0; display: flex; justify-content: center; align-items: center; }
+        .signal-box { padding: 12px 20px; border-radius: 8px; font-weight: 900; font-size: 1.6rem; text-transform: uppercase; letter-spacing: 1px; text-align: center; width: 100%; max-width: 500px; border: 2px solid #434651; background: #1e222d; color: #787b86; transition: all 0.3s ease; }
+        
+        .buy { background: rgba(0, 230, 118, 0.15); color: #00E676; border-color: #00E676; box-shadow: 0 0 15px rgba(0,230,118,0.2); }
+        .sell { background: rgba(255, 82, 82, 0.15); color: #FF5252; border-color: #FF5252; box-shadow: 0 0 15px rgba(255,82,82,0.2); }
+        
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="controls">
+            <select id="marketSelect" onchange="forceReset()">
+                <optgroup label="🚀 Super Fast (Crypto)">
+                    <option value="BTCUSDT" data-type="crypto" selected>BTC / USDT</option>
+                    <option value="ETHUSDT" data-type="crypto">ETH / USDT</option>
+                    <option value="SOLUSDT" data-type="crypto">SOL / USDT</option>
+                    <option value="BNBUSDT" data-type="crypto">BNB / USDT</option>
+                    <option value="DOGEUSDT" data-type="crypto">DOGE / USDT</option>
+                    <option value="XRPUSDT" data-type="crypto">XRP / USDT</option>
+                    <option value="LTCUSDT" data-type="crypto">LTC / USDT</option>
+                    <option value="ADAUSDT" data-type="crypto">ADA / USDT</option>
+                </optgroup>
+                <optgroup label="🌐 Forex Markets">
+                    <option value="EURJPY" data-type="forex">EUR / JPY</option>
+                    <option value="EURGBP" data-type="forex">EUR / GBP</option>
+                    <option value="USDJPY" data-type="forex">USD / JPY</option>
+                    <option value="AUDCAD" data-type="forex">AUD / CAD</option>
+                    <option value="EURUSD" data-type="forex">EUR / USD</option>
+                </optgroup>
+            </select>
+            <select id="intervalSelect" onchange="forceReset()" style="max-width: 90px;">
+                <option value="1" selected>1 Min</option>
+            </select>
+        </div>
+        <button class="refresh-btn" onclick="forceReset()">↻ Reload</button>
+    </div>
+    
+    <div class="main-content">
+        <div class="chart-box">
+            <div id="chartMessage">Loading Server...</div>
+            <div id="chartContainer"></div>
+        </div>
+        <div class="chart-footer">
+            <div class="live-indicator">
+                <span class="live-dot" id="liveDot"></span> 
+                <span id="marketStatusText">CONNECTING...</span>
+            </div>
+            <div class="time-display">
+                <span id="candleTimer" style="color:#FF9800;">00s</span> | <span id="clockDisplay">00:00</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="signal-wrapper">
+        <div id="signalDisplay" class="signal-box">⏳ WAITING...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    
+    <script>
+        let chart, candleSeries;
+        let updateInterval;
+        let isFirstLoad = true; 
+
+        setInterval(() => {
+            const now = new Date();
+            let h = now.getHours().toString().padStart(2, '0');
+            let m = now.getMinutes().toString().padStart(2, '0');
+            let s = now.getSeconds().toString().padStart(2, '0');
+            document.getElementById('clockDisplay').innerText = `${h}:${m}:${s}`;
+            document.getElementById('candleTimer').innerText = `${60 - now.getSeconds()}s`;
+        }, 1000);
+
+        function initChart() {
+            const container = document.getElementById('chartContainer');
+            container.innerHTML = ''; 
+            chart = LightweightCharts.createChart(container, {
+                layout: { background: { color: '#131722' }, textColor: '#d1d4dc' },
+                grid: { vertLines: { color: '#1e222d', style: 1 }, horzLines: { color: '#1e222d', style: 1 } },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 3, barSpacing: 10 },
+                rightPriceScale: { borderColor: '#2a2e39' },
+                handleScroll: true, handleScale: true,  
+            });
+            candleSeries = chart.addCandlestickSeries({ upColor: '#00E676', downColor: '#FF5252', borderVisible: false, wickUpColor: '#00E676', wickDownColor: '#FF5252' });
+        }
+
+        function calculateEMA(closes, len) {
+            let ema = new Array(closes.length).fill(null);
+            if(closes.length < len) return ema;
+            let k = 2 / (len + 1), sum = 0;
+            for(let i=0; i<len; i++) sum += closes[i];
+            ema[len-1] = sum / len;
+            for (let i = len; i < closes.length; i++) ema[i] = (closes[i] - ema[i-1]) * k + ema[i-1];
+            return ema;
+        }
+
+        async function fetchMarketData(symbol, type) {
+            if (type === 'crypto') {
+                let res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1m&limit=120`);
+                let data = await res.json();
+                return data.map(d => ({ time: d[0] / 1000, open: parseFloat(d[1]), high: parseFloat(d[2]), low: parseFloat(d[3]), close: parseFloat(d[4]) }));
+            } else {
+                let yfSymbol = symbol + "=X"; 
+                let targetUrl = encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${yfSymbol}?interval=1m&range=1d`);
+                let data = null;
+                try {
+                    let res = await fetch(`https://api.allorigins.win/get?url=${targetUrl}`);
+                    let json = await res.json();
+                    data = JSON.parse(json.contents);
+                } catch (e) {
+                    let res2 = await fetch(`https://api.codetabs.com/v1/proxy?quest=https://query1.finance.yahoo.com/v8/finance/chart/${yfSymbol}?interval=1m&range=1d`);
+                    data = await res2.json();
+                }
+                if(!data || !data.chart || !data.chart.result) throw new Error("API Blocked");
+                let result = data.chart.result[0];
+                let timestamps = result.timestamp || [];
+                let quote = result.indicators.quote[0];
+                let cleanData = [];
+                for(let i=0; i<timestamps.length; i++) {
+                    if(quote.close[i] !== null && quote.open[i] !== null) {
+                        cleanData.push({ time: timestamps[i], open: quote.open[i], high: quote.high[i], low: quote.low[i], close: quote.close[i] });
+                    }
+                }
+                return cleanData;
+            }
+        }
+
+        async function refreshData() {
+            const msgBox = document.getElementById('chartMessage');
+            try {
+                const select = document.getElementById('marketSelect');
+                const symbol = select.options[select.selectedIndex].value;
+                const type = select.options[select.selectedIndex].getAttribute('data-type');
+                
+                const allCandles = await fetchMarketData(symbol, type);
+                if(allCandles.length < 50) throw new Error("Not enough data");
+                
+                msgBox.style.display = "none";
+                const candles = allCandles.slice(-80); 
+                candleSeries.setData(candles);
+                
+                if (isFirstLoad) { chart.timeScale().fitContent(); isFirstLoad = false; }
+
+                const closes = candles.map(c => c.close);
+                // 🚀 MICRO-MOMENTUM EMAs (খুব ফাস্ট সিগন্যালের জন্য) 🚀
+                const ema3 = calculateEMA(closes, 3);
+                const ema7 = calculateEMA(closes, 7);
+
+                let markers = [];
+                let latestSignal = 'NEUTRAL';
+
+                // হিস্টোরি মার্কেট লুপ
+                for(let i = 10; i < candles.length - 1; i++) {
+                    let curr = candles[i];     
+                    let prev = candles[i-1];   
+                    
+                    let e3 = ema3[i];
+                    let e7 = ema7[i];
+                    
+                    let isPrevGreen = prev.close > prev.open;
+                    let isPrevRed = prev.close < prev.open;
+                    let isCurrGreen = curr.close > curr.open;
+                    let isCurrRed = curr.close < curr.open;
+
+                    // Condition: Trend is Up (EMA3 > EMA7) + Previous was Green + Current is Green
+                    if(e3 > e7 && isPrevGreen && isCurrGreen) {
+                        markers.push({ time: curr.time, position: 'belowBar', color: '#00E676', shape: 'arrowUp', text: 'BUY' });
+                    }
+                    // Condition: Trend is Down (EMA3 < EMA7) + Previous was Red + Current is Red
+                    if(e3 < e7 && isPrevRed && isCurrRed) {
+                        markers.push({ time: curr.time, position: 'aboveBar', color: '#FF5252', shape: 'arrowDown', text: 'SELL' });
+                    }
+                }
+
+                // 🔴 LIVE RUNNING CANDLE LOGIC (Instant Fire) 🔴
+                let liveC = candles[candles.length - 1]; 
+                let p1 = candles[candles.length - 2];    
+                
+                let e3Live = ema3[candles.length - 1];
+                let e7Live = ema7[candles.length - 1];
+
+                let isPrevGreenLive = p1.close > p1.open;
+                let isPrevRedLive = p1.close < p1.open;
+                let isLiveGreen = liveC.close > liveC.open;
+                let isLiveRed = liveC.close < liveC.open;
+
+                // যদি আগের ক্যান্ডেল সবুজ থাকে এবং রানিং ক্যান্ডেলও সবুজ হওয়া শুরু করে + মাইক্রো ট্রেন্ড আপ থাকে
+                if(e3Live > e7Live && isPrevGreenLive && isLiveGreen) {
+                    latestSignal = 'BUY'; 
+                    markers.push({ time: liveC.time, position: 'belowBar', color: '#00E676', shape: 'arrowUp', text: 'BUY NOW' });
+                } 
+                // যদি আগের ক্যান্ডেল লাল থাকে এবং রানিং ক্যান্ডেলও লাল হওয়া শুরু করে + মাইক্রো ট্রেন্ড ডাউন থাকে
+                else if(e3Live < e7Live && isPrevRedLive && isLiveRed) {
+                    latestSignal = 'SELL'; 
+                    markers.push({ time: liveC.time, position: 'aboveBar', color: '#FF5252', shape: 'arrowDown', text: 'SELL NOW' });
+                }
+
+                candleSeries.setMarkers(markers);
+                
+                // UI BOX UPDATE
+                const signalBox = document.getElementById('signalDisplay');
+                if(latestSignal === 'BUY'){
+                    signalBox.innerText = "🚀 BUY NOW (FAST)";
+                    signalBox.className = 'signal-box buy';
+                } else if(latestSignal === 'SELL'){
+                    signalBox.innerText = "🩸 SELL NOW (FAST)";
+                    signalBox.className = 'signal-box sell';
+                } else {
+                    signalBox.innerText = "⏳ WAITING...";
+                    signalBox.className = 'signal-box'; 
+                }
+
+                document.getElementById('marketStatusText').innerText = type === 'crypto' ? "SUPER FAST LIVE" : "LIVE FOREX";
+                document.getElementById('marketStatusText').style.color = "#00E676";
+                document.getElementById('liveDot').style.backgroundColor = "#00E676";
+
+            } catch (err) {
+                console.error(err);
+                msgBox.style.display = "block";
+                msgBox.innerText = "⚠️ Error! Connect VPN or Use Crypto.";
+                document.getElementById('marketStatusText').innerText = "DISCONNECTED";
+                document.getElementById('marketStatusText').style.color = "#FF5252";
+                document.getElementById('liveDot').style.backgroundColor = "#FF5252";
+            }
+        }
+
+        function forceReset() {
+            clearInterval(updateInterval);
+            isFirstLoad = true; 
+            document.getElementById('chartMessage').style.display = "block";
+            document.getElementById('chartMessage').innerText = "Loading Market Data...";
+            document.getElementById('signalDisplay').innerText = "♻️ LOADING...";
+            document.getElementById('signalDisplay').className = "signal-box";
+            initChart();
+            refreshData();
+            updateInterval = setInterval(refreshData, 2000); // ২ সেকেন্ড সুপার ফাস্ট আপডেট
+        }
+
+        initChart();
+        refreshData();
+        updateInterval = setInterval(refreshData, 2000); // ২ সেকেন্ড সুপার ফাস্ট আপডেট
+
+        window.addEventListener('resize', () => {
+            if(chart) {
+                chart.applyOptions({ width: document.getElementById('chartContainer').clientWidth, height: document.getElementById('chartContainer').clientHeight });
+            }
+        });
+
+    </script>
+</body>
+</html>
